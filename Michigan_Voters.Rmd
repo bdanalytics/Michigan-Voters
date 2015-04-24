@@ -1168,42 +1168,49 @@ print(tail(glb_script_df, 2))
 
 ```{r fit.data.training.all_1, cache=FALSE}
 glb_rsp_var_out <- paste0(glb_rsp_var_out, tail(names(glb_models_lst), 1))
-if (glb_is_regression) {
-    glb_trnent_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=glb_trnent_df, type="raw")
-    print(myplot_scatter(glb_trnent_df, glb_rsp_var, glb_rsp_var_out, 
-                         smooth=TRUE))
-    glb_trnent_df[, paste0(glb_rsp_var_out, ".err")] <- 
-        abs(glb_trnent_df[, glb_rsp_var_out] - glb_trnent_df[, glb_rsp_var])
-    print(head(orderBy(reformulate(c("-", paste0(glb_rsp_var_out, ".err"))), 
-                       glb_trnent_df)))                             
-}    
 
-if (glb_is_classification && glb_is_binomial) {
-    # incorporate glb_clf_proba_threshold
-    #   shd it only be for glb_fin_mdl or for earlier models ?
-    if ((prob_threshold <- 
-            glb_models_df[glb_models_df$model_id == glb_fin_mdl_id, "opt.prob.threshold.fit"]) != 
-        glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, "opt.prob.threshold.fit"])
-        stop("user specification for probability threshold required")
+# Used again in predict.data.new chunk
+glb_get_predictions <- function(df) {
+    if (glb_is_regression) {
+        df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=df, type="raw")
+        print(myplot_scatter(df, glb_rsp_var, glb_rsp_var_out, 
+                             smooth=TRUE))
+        df[, paste0(glb_rsp_var_out, ".err")] <- 
+            abs(df[, glb_rsp_var_out] - df[, glb_rsp_var])
+        print(head(orderBy(reformulate(c("-", paste0(glb_rsp_var_out, ".err"))), 
+                           df)))                             
+    }    
     
-    glb_trnent_df[, paste0(glb_rsp_var_out, ".prob")] <- 
-        predict(glb_fin_mdl, newdata=glb_trnent_df, type="prob")[, 2]
-    glb_trnent_df[, glb_rsp_var_out] <- 
-			factor(levels(glb_trnent_df[, glb_rsp_var])[
-				(glb_trnent_df[, paste0(glb_rsp_var_out, ".prob")] >=
-					prob_threshold) * 1 + 1], levels(glb_trnent_df[, glb_rsp_var]))
-
-    # prediction stats already reported by myfit_mdl ???
-}    
-
-if (glb_is_classification && !glb_is_binomial) {
-    glb_trnent_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=glb_trnent_df, type="raw")
-}    
+    if (glb_is_classification && glb_is_binomial) {
+        # incorporate glb_clf_proba_threshold
+        #   shd it only be for glb_fin_mdl or for earlier models ?
+        if ((prob_threshold <- 
+                glb_models_df[glb_models_df$model_id == glb_fin_mdl_id, "opt.prob.threshold.fit"]) != 
+            glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, "opt.prob.threshold.fit"])
+            stop("user specification for probability threshold required")
+        
+        df[, paste0(glb_rsp_var_out, ".prob")] <- 
+            predict(glb_fin_mdl, newdata=df, type="prob")[, 2]
+        df[, glb_rsp_var_out] <- 
+    			factor(levels(df[, glb_rsp_var])[
+    				(df[, paste0(glb_rsp_var_out, ".prob")] >=
+    					prob_threshold) * 1 + 1], levels(df[, glb_rsp_var]))
+    
+        # prediction stats already reported by myfit_mdl ???
+    }    
+    
+    if (glb_is_classification && !glb_is_binomial) {
+        df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=df, type="raw")
+    }
+    
+    return(df)
+}
+glb_trnent_df <- glb_get_predictions(glb_trnent_df)
 
 print(glb_feats_df <- mymerge_feats_importance(feats_df=glb_feats_df, sel_mdl=glb_fin_mdl, 
                                                entity_df=glb_trnent_df))
 
-# Most of this code is used again in predict.data.new chunk
+# Used again in predict.data.new chunk
 glb_analytics_diag_plots <- function(obs_df) {
     for (var in subset(glb_feats_df, !is.na(importance))$id) {
         plot_df <- melt(obs_df, id.vars=var, 
@@ -1258,12 +1265,7 @@ print(tail(glb_script_df, 2))
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: predict data.new
 ```{r predict.data.new, cache=FALSE}
 # Compute final model predictions
-glb_newent_df[, glb_rsp_var_out] <- 
-    mypredict_mdl(glb_fin_mdl, glb_newent_df, glb_rsp_var, glb_rsp_var_out, 
-                  "Final", "Final",
-                  glb_model_metric_smmry, glb_model_metric, 
-                  glb_model_metric_maximize, ret_type="raw")
-
+glb_newent_df <- glb_get_predictions(glb_newent_df)
 glb_analytics_diag_plots(obs_df=glb_newent_df)
 
 tmp_replay_lst <- replay.petrisim(pn=glb_analytics_pn, 
